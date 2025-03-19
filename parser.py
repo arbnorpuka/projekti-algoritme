@@ -1,6 +1,7 @@
 import re
 import json
 import sys
+import os
 
 class Instance:
     def __init__(self, filename):
@@ -84,11 +85,19 @@ def main():
         
         print(json_output)
 
-        # save to JSON file
-        with open('output.json', 'w') as f:
+        # Extract the base name of the input file (without extension)
+        base_name = os.path.splitext(os.path.basename(filename))[0]
+        
+        # Create the output directory if it doesn't exist
+        output_dir = "output"
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Save the JSON file as <base_name>-output.json inside the output directory
+        output_file = os.path.join(output_dir, f"{base_name}-output.json")
+        with open(output_file, 'w') as f:
             f.write(json_output)
 
-        print("Output saved to output.json")
+        print(f"Output saved to {output_file}")
 
     except FileNotFoundError:
         print(f"Error: File '{filename}' not found.")

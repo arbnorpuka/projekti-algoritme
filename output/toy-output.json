@@ -1,0 +1,140 @@
+{
+  "warehouses": [
+    {
+      "id": 1,
+      "capacity": 100,
+      "fixed_cost": 860
+    },
+    {
+      "id": 2,
+      "capacity": 40,
+      "fixed_cost": 350
+    },
+    {
+      "id": 3,
+      "capacity": 60,
+      "fixed_cost": 440
+    },
+    {
+      "id": 4,
+      "capacity": 60,
+      "fixed_cost": 580
+    }
+  ],
+  "stores": [
+    {
+      "id": 1,
+      "demand": 12,
+      "supply_costs": {
+        "warehouse_1": 27,
+        "warehouse_2": 66,
+        "warehouse_3": 44,
+        "warehouse_4": 55
+      }
+    },
+    {
+      "id": 2,
+      "demand": 17,
+      "supply_costs": {
+        "warehouse_1": 53,
+        "warehouse_2": 89,
+        "warehouse_3": 68,
+        "warehouse_4": 46
+      }
+    },
+    {
+      "id": 3,
+      "demand": 5,
+      "supply_costs": {
+        "warehouse_1": 17,
+        "warehouse_2": 40,
+        "warehouse_3": 18,
+        "warehouse_4": 61
+      }
+    },
+    {
+      "id": 4,
+      "demand": 13,
+      "supply_costs": {
+        "warehouse_1": 20,
+        "warehouse_2": 68,
+        "warehouse_3": 44,
+        "warehouse_4": 78
+      }
+    },
+    {
+      "id": 5,
+      "demand": 20,
+      "supply_costs": {
+        "warehouse_1": 42,
+        "warehouse_2": 89,
+        "warehouse_3": 65,
+        "warehouse_4": 78
+      }
+    },
+    {
+      "id": 6,
+      "demand": 20,
+      "supply_costs": {
+        "warehouse_1": 57,
+        "warehouse_2": 55,
+        "warehouse_3": 49,
+        "warehouse_4": 31
+      }
+    },
+    {
+      "id": 7,
+      "demand": 17,
+      "supply_costs": {
+        "warehouse_1": 89,
+        "warehouse_2": 101,
+        "warehouse_3": 90,
+        "warehouse_4": 16
+      }
+    },
+    {
+      "id": 8,
+      "demand": 19,
+      "supply_costs": {
+        "warehouse_1": 37,
+        "warehouse_2": 31,
+        "warehouse_3": 23,
+        "warehouse_4": 55
+      }
+    },
+    {
+      "id": 9,
+      "demand": 11,
+      "supply_costs": {
+        "warehouse_1": 76,
+        "warehouse_2": 60,
+        "warehouse_3": 63,
+        "warehouse_4": 44
+      }
+    },
+    {
+      "id": 10,
+      "demand": 20,
+      "supply_costs": {
+        "warehouse_1": 82,
+        "warehouse_2": 107,
+        "warehouse_3": 91,
+        "warehouse_4": 31
+      }
+    }
+  ],
+  "incompatibilities": [
+    {
+      "store_1": 1,
+      "store_2": 10
+    },
+    {
+      "store_1": 2,
+      "store_2": 7
+    },
+    {
+      "store_1": 8,
+      "store_2": 9
+    }
+  ]
+}
