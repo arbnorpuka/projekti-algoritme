@@ -1,6 +1,6 @@
 import re
 import json
-from collections import defaultdict
+import sys
 
 class Instance:
     def __init__(self, filename):
@@ -72,8 +72,27 @@ class Instance:
         return json.dumps(self.data, indent=2)
 
 def main():
-    instance = Instance('instances/toy.dzn')
-    print(instance.to_json())
+    if len(sys.argv) < 2:
+        print("Usage: python3 parser.py <filename>")
+        sys.exit(1)
+    
+    filename = sys.argv[1]
+    
+    try:
+        instance = Instance(filename)
+        json_output = instance.to_json()
+        
+        print(json_output)
+
+        # save to JSON file
+        with open('output.json', 'w') as f:
+            f.write(json_output)
+
+        print("Output saved to output.json")
+
+    except FileNotFoundError:
+        print(f"Error: File '{filename}' not found.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
