@@ -1,5 +1,7 @@
 import re
 import json
+import sys
+import os
 from collections import defaultdict
 
 class Instance:
@@ -134,8 +136,32 @@ class Instance:
         return json.dumps(self.data, indent=2)
 
 def main():
-    instance = Instance('instances/toy.dzn')
-    print(instance.to_json())
+    if len(sys.argv) < 2:
+        print("Usage: python3 parser.py <filename>")
+        sys.exit(1)
+    
+    filename = sys.argv[1]
+    
+    try:
+        instance = Instance(filename)
+        json_output = instance.to_json()
+        
+        print(json_output)
+
+        base_name = os.path.splitext(os.path.basename(filename))[0]
+        
+        output_dir = "output"
+        os.makedirs(output_dir, exist_ok=True)
+        
+        output_file = os.path.join(output_dir, f"{base_name}-output.json")
+        with open(output_file, 'w') as f:
+            f.write(json_output)
+
+        print(f"Output saved to {output_file}")
+
+    except FileNotFoundError:
+        print(f"Error: File '{filename}' not found.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
