@@ -30,7 +30,13 @@
         "warehouse_2": 66,
         "warehouse_3": 44,
         "warehouse_4": 55
-      }
+      },
+      "cheapest_warehouse": "warehouse_1",
+      "total_supply_cost": 192,
+      "incompatibility_count": 1,
+      "incompatible_stores": [
+        10
+      ]
     },
     {
       "id": 2,
@@ -40,7 +46,13 @@
         "warehouse_2": 89,
         "warehouse_3": 68,
         "warehouse_4": 46
-      }
+      },
+      "cheapest_warehouse": "warehouse_4",
+      "total_supply_cost": 256,
+      "incompatibility_count": 1,
+      "incompatible_stores": [
+        7
+      ]
     },
     {
       "id": 3,
@@ -50,7 +62,11 @@
         "warehouse_2": 40,
         "warehouse_3": 18,
         "warehouse_4": 61
-      }
+      },
+      "cheapest_warehouse": "warehouse_1",
+      "total_supply_cost": 136,
+      "incompatibility_count": 0,
+      "incompatible_stores": []
     },
     {
       "id": 4,
@@ -60,7 +76,11 @@
         "warehouse_2": 68,
         "warehouse_3": 44,
         "warehouse_4": 78
-      }
+      },
+      "cheapest_warehouse": "warehouse_1",
+      "total_supply_cost": 210,
+      "incompatibility_count": 0,
+      "incompatible_stores": []
     },
     {
       "id": 5,
@@ -70,7 +90,11 @@
         "warehouse_2": 89,
         "warehouse_3": 65,
         "warehouse_4": 78
-      }
+      },
+      "cheapest_warehouse": "warehouse_1",
+      "total_supply_cost": 274,
+      "incompatibility_count": 0,
+      "incompatible_stores": []
     },
     {
       "id": 6,
@@ -80,7 +104,11 @@
         "warehouse_2": 55,
         "warehouse_3": 49,
         "warehouse_4": 31
-      }
+      },
+      "cheapest_warehouse": "warehouse_4",
+      "total_supply_cost": 192,
+      "incompatibility_count": 0,
+      "incompatible_stores": []
     },
     {
       "id": 7,
@@ -90,7 +118,13 @@
         "warehouse_2": 101,
         "warehouse_3": 90,
         "warehouse_4": 16
-      }
+      },
+      "cheapest_warehouse": "warehouse_4",
+      "total_supply_cost": 296,
+      "incompatibility_count": 1,
+      "incompatible_stores": [
+        2
+      ]
     },
     {
       "id": 8,
@@ -100,7 +134,13 @@
         "warehouse_2": 31,
         "warehouse_3": 23,
         "warehouse_4": 55
-      }
+      },
+      "cheapest_warehouse": "warehouse_3",
+      "total_supply_cost": 146,
+      "incompatibility_count": 1,
+      "incompatible_stores": [
+        9
+      ]
     },
     {
       "id": 9,
@@ -110,7 +150,13 @@
         "warehouse_2": 60,
         "warehouse_3": 63,
         "warehouse_4": 44
-      }
+      },
+      "cheapest_warehouse": "warehouse_4",
+      "total_supply_cost": 243,
+      "incompatibility_count": 1,
+      "incompatible_stores": [
+        8
+      ]
     },
     {
       "id": 10,
@@ -120,7 +166,13 @@
         "warehouse_2": 107,
         "warehouse_3": 91,
         "warehouse_4": 31
-      }
+      },
+      "cheapest_warehouse": "warehouse_4",
+      "total_supply_cost": 311,
+      "incompatibility_count": 1,
+      "incompatible_stores": [
+        1
+      ]
     }
   ],
   "incompatibilities": [
@@ -136,5 +188,16 @@
       "store_1": 8,
       "store_2": 9
     }
-  ]
+  ],
+  "warehouse_stats": {
+    "total_capacity": 260,
+    "avg_fixed_cost": 557.5,
+    "total_demand": 154,
+    "capacity_utilization": 59.23076923076923
+  },
+  "global_stats": {
+    "total_fixed_cost": 2230,
+    "total_supply_cost": 2256,
+    "cost_per_unit_demand": 29.12987012987013
+  }
 }

@@ -70,7 +70,7 @@ def generate_simplified_solution(data):
     return solution
 
 try:
-    with open("output/wlp01-output.json", "r") as file:
+    with open("output/toy-output.json", "r") as file:
         data = json.load(file)
 except FileNotFoundError:
     print("Error: 'output/toy-output-solution.json' not found.")

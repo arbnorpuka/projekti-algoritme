@@ -61,7 +61,36 @@ def check_constraints(data, solution):
         if supply != store_demands[store_id]:
             print(f"Store demand constraint violated for store {store_id}.")
             return False
+
+    # 3. Supply from Open Warehouses Constraint
+    #    This constraint is implicitly satisfied by the solution format itself.
+    #    The solution only specifies supplies, so if a warehouse isn't in the solution,
+    #    it's considered closed, and no supplies will be from it.
+
+    # 4. Store Incompatibility Constraints
+    incompatible_pairs = {}
+    for pair in incompatibilities:
+        incompatible_pairs[(pair["store_1"], pair["store_2"])] = True
+    
+    for pair in incompatible_pairs:
+        store_1_warehouse = None
+        store_2_warehouse = None
         
+        for supply in solution:
+            if supply[0] == pair[0]:
+                store_1_warehouse = supply[1]
+            if supply[0] == pair[1]:
+                store_2_warehouse = supply[1]
+            
+            if store_1_warehouse is not None and store_2_warehouse is not None:
+                break
+        
+        if store_1_warehouse == store_2_warehouse:
+            print(f"Incompatibility constraint violated for stores {pair[0]} and {pair[1]}.")
+            return False
+
+    return True
+
 try:
     with open("output/toy-output.json", "r") as file:
         data = json.load(file)
