@@ -1,11 +1,20 @@
 import json
 import sys
 import os
-from collections import defaultdict
+import heapq
+import random
+from collections import defaultdict, Counter
 
 class WarehouseLocationSolver:
     def __init__(self, json_data):
         self.parse_json(json_data)
+        # Cache incompatibilities for faster lookup
+        self.incompatibility_map = defaultdict(set)
+        for s1, s2 in self.incompatibilities:
+            self.incompatibility_map[s1].add(s2)
+            self.incompatibility_map[s2].add(s1)
+        
+        self.efficiencies = self._precompute_efficiencies()
         
     def parse_json(self, json_data):
         """parse the json input data"""
@@ -43,78 +52,77 @@ class WarehouseLocationSolver:
             s2 = self.store_ids.index(inc['store_2'])
             self.incompatibilities.append((s1, s2))
     
-    def greedy_construction(self):
-        """greedy construction heuristic to build initial solution"""
-        solution = [[0 for _ in range(self.num_warehouses)] for _ in range(self.num_stores)]
-        open_warehouses = set()
-        remaining_demand = self.goods.copy()
-        warehouse_used_capacity = [0] * self.num_warehouses
-        
-        # calculate cost of assigning each store to each warehouse
-        assignment_costs = []
+    def _precompute_efficiencies(self):
+        """Precompute efficiency scores for all store-warehouse pairs"""
+        efficiencies = []
         for s in range(self.num_stores):
             for w in range(self.num_warehouses):
-                cost = self.supply_costs[s][w] * self.goods[s]
-                if w not in open_warehouses:
-                    cost += self.fixed_costs[w]
-                assignment_costs.append((cost, s, w))
+                efficiency = -1 * self.supply_costs[s][w]
+                efficiencies.append((efficiency, s, w))
+        return sorted(efficiencies)
+    
+    def calculate_initial_solution(self):
+        """Create initial solution using improved construction heuristic"""
+        solution = [[0 for _ in range(self.num_warehouses)] for _ in range(self.num_stores)]
+        remaining_demand = self.goods.copy()
+        warehouse_used_capacity = [0] * self.num_warehouses
+        open_warehouses = set()
         
-        # sort assignments by cost
-        assignment_costs.sort()
+        store_priority = [(demand, idx) for idx, demand in enumerate(self.goods)]
+        store_priority.sort(reverse=True)
+        store_order = [s for _, s in store_priority]
         
-        # make assignments greedily
-        for cost, s, w in assignment_costs:
+        for s in store_order:
             if remaining_demand[s] == 0:
                 continue
                 
-            # check capacity and incompatibilities
-            if warehouse_used_capacity[w] + remaining_demand[s] > self.capacities[w]:
-                continue
+            for _, store, w in self.efficiencies:
+                if store != s or warehouse_used_capacity[w] + remaining_demand[s] > self.capacities[w]:
+                    continue
                 
-            # check if this assignment would violate any incompatibilities
-            valid = True
-            for other_s in range(self.num_stores):
-                if solution[other_s][w] > 0:
-                    if (s, other_s) in self.incompatibilities or (other_s, s) in self.incompatibilities:
-                        valid = False
-                        break
-            if not valid:
-                continue
+                if any(other_s in self.incompatibility_map[s] for other_s in range(self.num_stores) 
+                       if solution[other_s][w] > 0):
+                    continue
                 
-            # make the assignment
-            assign_amount = min(remaining_demand[s], self.capacities[w] - warehouse_used_capacity[w])
-            solution[s][w] = assign_amount
-            remaining_demand[s] -= assign_amount
-            warehouse_used_capacity[w] += assign_amount
-            open_warehouses.add(w)
-            
-            if remaining_demand[s] == 0:
-                continue
+                solution[s][w] = remaining_demand[s]
+                warehouse_used_capacity[w] += remaining_demand[s]
+                open_warehouses.add(w)
+                remaining_demand[s] = 0
+                break
         
-        # if any stores still have demand, try to satisfy it
         for s in range(self.num_stores):
-            if remaining_demand[s] > 0:
-                # try to find any warehouse that can take the remaining demand
-                for w in range(self.num_warehouses):
-                    if warehouse_used_capacity[w] + remaining_demand[s] <= self.capacities[w]:
-                        # check incompatibilities
-                        valid = True
-                        for other_s in range(self.num_stores):
-                            if solution[other_s][w] > 0:
-                                if (s, other_s) in self.incompatibilities or (other_s, s) in self.incompatibilities:
-                                    valid = False
-                                    break
-                        if valid:
-                            solution[s][w] += remaining_demand[s]
-                            warehouse_used_capacity[w] += remaining_demand[s]
-                            remaining_demand[s] = 0
-                            open_warehouses.add(w)
-                            break
+            if remaining_demand[s] == 0:
+                continue
+                
+            # sort warehouses by cost for this store
+            warehouse_costs = [(self.supply_costs[s][w], w) for w in range(self.num_warehouses)]
+            warehouse_costs.sort()
+            
+            for _, w in warehouse_costs:
+                if remaining_demand[s] == 0:
+                    break
+                    
+                # check capacity
+                available_capacity = self.capacities[w] - warehouse_used_capacity[w]
+                if available_capacity <= 0:
+                    continue
+                    
+                # check incompatibilities
+                if any(other_s in self.incompatibility_map[s] for other_s in range(self.num_stores) 
+                       if solution[other_s][w] > 0):
+                    continue
+                
+                # make partial assignment
+                assign_amount = min(remaining_demand[s], available_capacity)
+                solution[s][w] = assign_amount
+                warehouse_used_capacity[w] += assign_amount
+                open_warehouses.add(w)
+                remaining_demand[s] -= assign_amount
         
         return solution
     
     def calculate_cost(self, solution):
-        """calculate total cost of a solution"""
+        """Calculate total cost of a solution with caching for open warehouses"""
         supply_cost = 0
         open_warehouses = set()
         
@@ -125,110 +133,169 @@ class WarehouseLocationSolver:
                     open_warehouses.add(w)
         
         opening_cost = sum(self.fixed_costs[w] for w in open_warehouses)
-        return supply_cost + opening_cost
+        return supply_cost + opening_cost, open_warehouses
     
     def is_feasible(self, solution):
-        """check if solution satisfies all constraints"""
+        """Check if solution satisfies all constraints"""
         # check all stores have their demand met
         for s in range(self.num_stores):
             if sum(solution[s]) != self.goods[s]:
                 return False
         
         # check warehouse capacities
+        warehouse_usage = [0] * self.num_warehouses
+        for s in range(self.num_stores):
+            for w in range(self.num_warehouses):
+                warehouse_usage[w] += solution[s][w]
+                
         for w in range(self.num_warehouses):
-            total = sum(solution[s][w] for s in range(self.num_stores))
-            if total > self.capacities[w]:
+            if warehouse_usage[w] > self.capacities[w]:
                 return False
         
-        # check incompatibilities
+        # check incompatibilities using the map
         for w in range(self.num_warehouses):
-            stores_served = [s for s in range(self.num_stores) if solution[s][w] > 0]
-            for i in range(len(stores_served)):
-                for j in range(i+1, len(stores_served)):
-                    s1, s2 = stores_served[i], stores_served[j]
-                    if (s1, s2) in self.incompatibilities or (s2, s1) in self.incompatibilities:
-                        return False
+            stores_at_warehouse = [s for s in range(self.num_stores) if solution[s][w] > 0]
+            for s1 in stores_at_warehouse:
+                if any(s2 in self.incompatibility_map[s1] for s2 in stores_at_warehouse if s2 != s1):
+                    return False
         
         return True
     
-    def local_search(self, initial_solution, max_iter=1000):
-        """improve solution using local search with interchange moves"""
+    def improved_local_search(self, initial_solution, max_iter=1000, max_no_improve=100):
+        """Improved local search with random neighborhood selection and early stopping"""
         current_solution = [row.copy() for row in initial_solution]
-        current_cost = self.calculate_cost(current_solution)
+        current_cost, open_warehouses = self.calculate_cost(current_solution)
+        best_cost = current_cost
+        best_solution = [row.copy() for row in current_solution]
         
-        for _ in range(max_iter):
+        no_improve_counter = 0
+        iteration = 0
+        
+        warehouse_usage = [0] * self.num_warehouses
+        for s in range(self.num_stores):
+            for w in range(self.num_warehouses):
+                warehouse_usage[w] += current_solution[s][w]
+        
+        stores_at_warehouse = [set(s for s in range(self.num_stores) if current_solution[s][w] > 0) 
+                               for w in range(self.num_warehouses)]
+        
+        while iteration < max_iter and no_improve_counter < max_no_improve:
+            iteration += 1
             improved = False
             
-            # try all possible single moves
-            for s in range(self.num_stores):
-                for w_from in range(self.num_warehouses):
-                    if current_solution[s][w_from] == 0:
-                        continue
-                        
-                    for w_to in range(self.num_warehouses):
-                        if w_from == w_to:
-                            continue
-                            
-                        # check if move is possible
-                        if sum(current_solution[s2][w_to] for s2 in range(self.num_stores)) + current_solution[s][w_from] > self.capacities[w_to]:
-                            continue
-                            
-                        # check incompatibilities
-                        valid = True
-                        for other_s in range(self.num_stores):
-                            if current_solution[other_s][w_to] > 0:
-                                if (s, other_s) in self.incompatibilities or (other_s, s) in self.incompatibilities:
-                                    valid = False
-                                    break
-                        if not valid:
-                            continue
-                            
-                        # create neighbor solution
-                        neighbor = [row.copy() for row in current_solution]
-                        amount = neighbor[s][w_from]
-                        neighbor[s][w_from] = 0
-                        neighbor[s][w_to] = amount
-                        
-                        # calculate cost difference
-                        cost_diff = amount * (self.supply_costs[s][w_to] - self.supply_costs[s][w_from])
-                        
-                        # check if we need to open or close warehouses
-                        from_open = any(neighbor[s2][w_from] > 0 for s2 in range(self.num_stores))
-                        to_open = any(neighbor[s2][w_to] > 0 for s2 in range(self.num_stores))
-                        
-                        if not from_open and any(current_solution[s2][w_from] > 0 for s2 in range(self.num_stores)):
-                            cost_diff -= self.fixed_costs[w_from]
-                        if to_open and not any(current_solution[s2][w_to] > 0 for s2 in range(self.num_stores)):
-                            cost_diff += self.fixed_costs[w_to]
-                            
-                        if cost_diff < 0:  # improvement found
-                            current_solution = neighbor
-                            current_cost += cost_diff
-                            improved = True
-                            break
-                            
-                    if improved:
-                        break
-                if improved:
-                    break
-                    
-            if not improved:
+            stores_with_demand = [s for s in range(self.num_stores) if sum(current_solution[s]) > 0]
+            if not stores_with_demand:
                 break
                 
-        return current_solution
+            s = random.choice(stores_with_demand)
+            
+            current_assignments = [(w, current_solution[s][w]) for w in range(self.num_warehouses) if current_solution[s][w] > 0]
+            if not current_assignments:
+                continue
+                
+            w_from, amount = random.choice(current_assignments)
+            
+            potential_targets = [w for w in range(self.num_warehouses) if w != w_from]
+            random.shuffle(potential_targets)
+            
+            for w_to in potential_targets:
+                if warehouse_usage[w_to] + amount > self.capacities[w_to]:
+                    continue
+                    
+                if any(other_s in self.incompatibility_map[s] for other_s in stores_at_warehouse[w_to]):
+                    continue
+                    
+                cost_diff = amount * (self.supply_costs[s][w_to] - self.supply_costs[s][w_from])
+                
+                stores_from_after = stores_at_warehouse[w_from].copy()
+                stores_from_after.remove(s)
+                
+                stores_to_after = stores_at_warehouse[w_to].copy()
+                stores_to_after.add(s)
+                
+                if not stores_from_after and w_from in open_warehouses:
+                    cost_diff -= self.fixed_costs[w_from] 
+                    
+                if not stores_at_warehouse[w_to] and w_to not in open_warehouses:
+                    cost_diff += self.fixed_costs[w_to]
+                
+                if cost_diff < 0 or (random.random() < 0.01 and iteration > max_iter // 2):
+                    current_solution[s][w_from] -= amount
+                    current_solution[s][w_to] += amount
+                    
+                    warehouse_usage[w_from] -= amount
+                    warehouse_usage[w_to] += amount
+                    
+                    if current_solution[s][w_from] == 0:
+                        stores_at_warehouse[w_from].remove(s)
+                    stores_at_warehouse[w_to].add(s)
+                    
+                    if not stores_at_warehouse[w_from]:
+                        open_warehouses.discard(w_from)
+                    if stores_at_warehouse[w_to]:
+                        open_warehouses.add(w_to)
+                    
+                    current_cost += cost_diff
+                    improved = True
+                    
+                    if current_cost < best_cost:
+                        best_cost = current_cost
+                        best_solution = [row.copy() for row in current_solution]
+                        no_improve_counter = 0
+                    else:
+                        no_improve_counter += 1
+                        
+                    break
+            
+            if not improved:
+                no_improve_counter += 1
+        
+        return best_solution
     
     def solve(self):
-        # greedy construction
-        solution = self.greedy_construction()
+        # generate initial solution
+        solution = self.calculate_initial_solution()
         
         if not self.is_feasible(solution):
-            print("warning: initial greedy solution is not feasible", file=sys.stderr)
+            # if initial solution isn't feasible, try a different approach
+            solution = [[0 for _ in range(self.num_warehouses)] for _ in range(self.num_stores)]
+            
+            # simple approach: assign each store to warehouses with sufficient capacity
+            # and no incompatibilities
+            remaining_demand = self.goods.copy()
+            for s in range(self.num_stores):
+                # sort warehouses by cost
+                warehouses = [(self.supply_costs[s][w], w) for w in range(self.num_warehouses)]
+                warehouses.sort()
+                
+                for _, w in warehouses:
+                    if remaining_demand[s] == 0:
+                        break
+                        
+                    # check capacity
+                    warehouse_used = sum(solution[other_s][w] for other_s in range(self.num_stores))
+                    available = self.capacities[w] - warehouse_used
+                    
+                    # check incompatibilities
+                    incompatible = False
+                    for other_s in range(self.num_stores):
+                        if solution[other_s][w] > 0 and (s in self.incompatibility_map[other_s]):
+                            incompatible = True
+                            break
+                    
+                    if incompatible or available <= 0:
+                        continue
+                        
+                    # assign
+                    assign_amount = min(remaining_demand[s], available)
+                    solution[s][w] = assign_amount
+                    remaining_demand[s] -= assign_amount
         
-        # local search
-        solution = self.local_search(solution)
+        # apply local search with different parameters for diversification
+        solution = self.improved_local_search(solution, max_iter=1000, max_no_improve=100)
         
-        # additional refinement
-        solution = self.local_search(solution, max_iter=500)
+        # apply focused search on promising solution
+        solution = self.improved_local_search(solution, max_iter=500, max_no_improve=50)
         
         return solution
     
@@ -258,16 +325,14 @@ class WarehouseLocationSolver:
             else:
                 f.write(self.format_list_solution(solution))
         
-        total_cost = self.calculate_cost(solution)
+        total_cost, open_warehouses = self.calculate_cost(solution)
         supply_cost = 0
-        opening_cost = 0
         
-        open_warehouses = set()
         for s in range(self.num_stores):
             for w in range(self.num_warehouses):
                 if solution[s][w] > 0:
                     supply_cost += solution[s][w] * self.supply_costs[s][w]
-                    open_warehouses.add(w)
+        
         opening_cost = sum(self.fixed_costs[w] for w in open_warehouses)
         
         print(f"solution written to {output_file}")
@@ -289,6 +354,8 @@ def main():
     except json.JSONDecodeError:
         print(f"error: invalid json in file '{input_file}'", file=sys.stderr)
         sys.exit(1)
+    
+    os.makedirs('solutions', exist_ok=True)
     
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     output_file = f"solutions/solution-{base_name}.txt"
