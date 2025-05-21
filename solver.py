@@ -117,38 +117,6 @@ class WarehouseLocationSolver:
                     if stores[j] in self.incompatibility_map[stores[i]]: return False
         return True
 
-    def improved_local_search(self, sol, max_iter=1000, max_no=100):
-        current=[row.copy() for row in sol]
-        cost, open_wh=self.calculate_cost(current)
-        best_cost=cost; best=[row.copy() for row in current]
-        no_imp=0; it=0
-        usage=[sum(current[s][w] for s in range(self.num_stores)) for w in range(self.num_warehouses)]
-        stores_at=[{s for s in range(self.num_stores) if current[s][w]>0} for w in range(self.num_warehouses)]
-        while it<max_iter and no_imp<max_no:
-            it+=1; improved=False
-            stores=[s for s in range(self.num_stores) if sum(current[s])>0]
-            s=random.choice(stores)
-            assigns=[(w,current[s][w]) for w in range(self.num_warehouses) if current[s][w]>0]
-            if not assigns: continue
-            w_from,amt=random.choice(assigns)
-            for w_to in random.sample(range(self.num_warehouses),self.num_warehouses):
-                if w_to==w_from: continue
-                if usage[w_to]+amt>self.capacities[w_to]: continue
-                if any(other in self.incompatibility_map[s] for other in stores_at[w_to]): continue
-                diff=amt*(self.supply_costs[s][w_to]-self.supply_costs[s][w_from])
-                if diff<0 or (random.random()<0.01 and it>max_iter//2):
-                    current[s][w_from]-=amt; current[s][w_to]+=amt
-                    usage[w_from]-=amt; usage[w_to]+=amt
-                    stores_at[w_from].discard(s); stores_at[w_to].add(s)
-                    if not stores_at[w_from]: open_wh.discard(w_from)
-                    open_wh.add(w_to)
-                    cost+=diff; improved=True
-                    if cost<best_cost: best_cost=cost; best=[row.copy() for row in current]; no_imp=0
-                    else: no_imp+=1
-                    break
-            if not improved: no_imp+=1
-        return best
-
     def multi_store_relocation(self, sol, open_wh, usage):
         improved=False
         evals=[(self.fixed_costs[w]*(1+usage[w]/self.capacities[w]),w) for w in open_wh]
@@ -193,11 +161,120 @@ class WarehouseLocationSolver:
                 return True
         return False
 
+    def harmony_search(self, initial_solution, harmony_memory_size=50, max_iterations=5000, 
+                      harmony_memory_consideration_rate=0.85, pitch_adjustment_rate=0.2):
+        # initialize harmony memory with feasible solutions
+        harmony_memory = []
+        for _ in range(harmony_memory_size):
+            solution = [[0] * self.num_warehouses for _ in range(self.num_stores)]
+            remaining_demand = self.goods.copy()
+            warehouse_usage = [0] * self.num_warehouses
+            
+            # create a random feasible solution
+            for s in range(self.num_stores):
+                available_warehouses = [w for w in range(self.num_warehouses) 
+                                     if (warehouse_usage[w] + remaining_demand[s] <= self.capacities[w] and
+                                         not any(other in self.incompatibility_map[s] 
+                                               for other in range(self.num_stores) 
+                                               if solution[other][w] > 0))]
+                if available_warehouses:
+                    w = random.choice(available_warehouses)
+                    solution[s][w] = remaining_demand[s]
+                    warehouse_usage[w] += remaining_demand[s]
+                    remaining_demand[s] = 0
+            
+            if self.is_feasible(solution):
+                cost, _ = self.calculate_cost(solution)
+                harmony_memory.append((cost, solution))
+        
+        if not harmony_memory:
+            harmony_memory = [(self.calculate_cost(initial_solution)[0], initial_solution)]
+        harmony_memory.sort()
+
+        best_solution = harmony_memory[0][1]
+        best_cost = harmony_memory[0][0]
+
+        for iteration in range(max_iterations):
+            # create new harmony
+            new_solution = [[0] * self.num_warehouses for _ in range(self.num_stores)]
+            remaining_demand = self.goods.copy()
+            warehouse_usage = [0] * self.num_warehouses
+            
+            for s in range(self.num_stores):
+                if random.random() < harmony_memory_consideration_rate:
+                    memory_solution = random.choice(harmony_memory)[1]
+                    for w in range(self.num_warehouses):
+                        if memory_solution[s][w] > 0:
+                            if (warehouse_usage[w] + remaining_demand[s] <= self.capacities[w] and
+                                not any(other in self.incompatibility_map[s] 
+                                      for other in range(self.num_stores) 
+                                      if new_solution[other][w] > 0)):
+                                new_solution[s][w] = remaining_demand[s]
+                                warehouse_usage[w] += remaining_demand[s]
+                                remaining_demand[s] = 0
+                                break
+                            
+                            # pitch adjustment
+                            if random.random() < pitch_adjustment_rate:
+                                for w2 in range(self.num_warehouses):
+                                    if (w2 != w and 
+                                        warehouse_usage[w2] + remaining_demand[s] <= self.capacities[w2] and
+                                        not any(other in self.incompatibility_map[s] 
+                                              for other in range(self.num_stores) 
+                                              if new_solution[other][w2] > 0)):
+                                        new_solution[s][w] = 0
+                                        new_solution[s][w2] = remaining_demand[s]
+                                        warehouse_usage[w] -= remaining_demand[s]
+                                        warehouse_usage[w2] += remaining_demand[s]
+                                        remaining_demand[s] = 0
+                                        break
+                
+                if remaining_demand[s] > 0:
+                    available_warehouses = [w for w in range(self.num_warehouses) 
+                                         if (warehouse_usage[w] + remaining_demand[s] <= self.capacities[w] and
+                                             not any(other in self.incompatibility_map[s] 
+                                                   for other in range(self.num_stores) 
+                                                   if new_solution[other][w] > 0))]
+                    if available_warehouses:
+                        w = random.choice(available_warehouses)
+                        new_solution[s][w] = remaining_demand[s]
+                        warehouse_usage[w] += remaining_demand[s]
+                        remaining_demand[s] = 0
+
+            for s in range(self.num_stores):
+                if remaining_demand[s] > 0:
+                    for w in range(self.num_warehouses):
+                        if (warehouse_usage[w] + remaining_demand[s] <= self.capacities[w] and
+                            not any(other in self.incompatibility_map[s] 
+                                  for other in range(self.num_stores) 
+                                  if new_solution[other][w] > 0)):
+                            new_solution[s][w] = remaining_demand[s]
+                            warehouse_usage[w] += remaining_demand[s]
+                            remaining_demand[s] = 0
+                            break
+
+            # if solution is not feasible, skip this iteration
+            if not self.is_feasible(new_solution):
+                continue
+
+            # calculate cost of new solution
+            new_cost, _ = self.calculate_cost(new_solution)
+
+            # update harmony memory
+            if new_cost < harmony_memory[-1][0]:
+                harmony_memory[-1] = (new_cost, new_solution)
+                harmony_memory.sort()
+                if new_cost < best_cost:
+                    best_cost = new_cost
+                    best_solution = [row[:] for row in new_solution]
+
+        return best_solution
+
     def solve(self):
-        sol=self.calculate_initial_solution()
+        sol = self.calculate_initial_solution()
         if not self.is_feasible(sol):
-            sol=[[0]*self.num_warehouses for _ in range(self.num_stores)]
-            rem=self.goods.copy()
+            sol = [[0]*self.num_warehouses for _ in range(self.num_stores)]
+            rem = self.goods.copy()
             for s in range(self.num_stores):
                 for cost,w in sorted([(self.supply_costs[s][w],w) for w in range(self.num_warehouses)]):
                     if rem[s]==0: break
@@ -206,19 +283,27 @@ class WarehouseLocationSolver:
                     if any(x in self.incompatibility_map[s] for x in range(self.num_stores) if sol[x][w]>0): continue
                     amt=min(rem[s],self.capacities[w]-used_cap)
                     sol[s][w]=amt; rem[s]-=amt
-        before=self.improved_local_search(sol)
-        cost_b,_=self.calculate_cost(before)
-        print(f"Cost before multi_store_relocation: {cost_b}")
-        cost,open_wh=self.calculate_cost(before)
-        usage=[sum(before[x][w] for x in range(self.num_stores)) for w in range(self.num_warehouses)]
+
+        # harmony search
+        print("Applying Harmony Search...")
+        harmony_solution = self.harmony_search(sol)
+        cost_h, _ = self.calculate_cost(harmony_solution)
+        print(f"Cost after Harmony Search: {cost_h}")
+
+        # multi-store relocation
+        cost, open_wh = self.calculate_cost(harmony_solution)
+        usage = [sum(harmony_solution[x][w] for x in range(self.num_stores)) for w in range(self.num_warehouses)]
+        
         for _ in range(500):
-            if not self.multi_store_relocation(before,open_wh,usage): break
-        print(f"Cost after multi_store_relocation: {self.calculate_cost(before)[0]}")
+            if not self.multi_store_relocation(harmony_solution, open_wh, usage): break
+        print(f"Cost after multi_store_relocation: {self.calculate_cost(harmony_solution)[0]}")
+        
+        # swap warehouse operator
         for _ in range(500):
-            if not self.swap_warehouse_operator(before,open_wh,usage): break
-        print(f"Cost after swap_warehouse_operator: {self.calculate_cost(before)[0]}")
-        final=self.improved_local_search(before,max_iter=500,max_no=50)
-        return final
+            if not self.swap_warehouse_operator(harmony_solution, open_wh, usage): break
+        print(f"Cost after swap_warehouse_operator: {self.calculate_cost(harmony_solution)[0]}")
+        
+        return harmony_solution
 
     def format_matrix_solution(self, solution):
         out="["
